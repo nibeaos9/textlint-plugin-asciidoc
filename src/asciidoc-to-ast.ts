@@ -7,8 +7,33 @@ import { convert } from "html-to-text";
 const doctor = asciidoctor();
 
 export function parse(text: string): AnyTxtNode {
-  return new Converter(text).convert();
-};
+  // Input validation
+  if (!text || typeof text !== 'string') {
+    return createEmptyDocument();
+  }
+  
+  if (text.trim() === '') {
+    return createEmptyDocument();
+  }
+  
+  try {
+    return new Converter(text).convert();
+  } catch (error) {
+    console.warn('Failed to parse AsciiDoc content:', error);
+    return createEmptyDocument();
+  }
+}
+
+// Helper function for creating empty document
+function createEmptyDocument(): AnyTxtNode {
+  return {
+    type: ASTNodeTypes.Document,
+    children: [],
+    range: [0, 0] as TextNodeRange,
+    loc: { start: { line: 1, column: 0 }, end: { line: 1, column: 0 } },
+    raw: ""
+  };
+}
 
 interface LineCursor {
   min: number;
@@ -22,6 +47,11 @@ export class Converter {
   chars: number[];
 
   constructor(text: string) {
+    // Allow empty string for testing purposes, but validate other cases
+    if (text === null || text === undefined || typeof text !== 'string') {
+      throw new Error('Invalid input: text must be a string');
+    }
+    
     this.text = text;
     this.lines = text.split(/\n/);
     this.chars = [0];
@@ -31,15 +61,20 @@ export class Converter {
   }
 
   convert(): AnyTxtNode {
-    const doc = doctor.load(this.text, { sourcemap: true });
-    const elements = this.convertElement(doc, {
-      min: 1,
-      max: this.lines.length
-    });
-    if (elements.length === 0) {
+    try {
+      const doc = doctor.load(this.text, { sourcemap: true });
+      const elements = this.convertElement(doc, {
+        min: 1,
+        max: this.lines.length
+      });
+      if (elements.length === 0) {
+        return this.createEmptyDocument();
+      }
+      return elements[0];
+    } catch (error) {
+      console.warn('Error during AST conversion:', error);
       return this.createEmptyDocument();
     }
-    return elements[0];
   }
 
   convertElement(elem: Asciidoctor.AbstractBlock, cursor: LineCursor): AnyTxtNode[] {
@@ -391,6 +426,10 @@ export class Converter {
   }
 
   locAndRangeFrom(children: AnyTxtNode[]) {
+    if (!children || children.length === 0) {
+      throw new Error('Cannot calculate location from empty children array');
+    }
+    
     const loc = {
       start: children[0].loc.start,
       end: children[children.length - 1].loc.end
@@ -400,7 +439,16 @@ export class Converter {
   }
 
   positionToIndex(position: TxtNodePosition): number {
-    return this.chars[position.line - 1] + position.column;
+    if (!position || position.line < 1 || position.column < 0) {
+      return 0;
+    }
+    
+    const lineIndex = position.line - 1;
+    if (lineIndex >= this.chars.length) {
+      return this.chars[this.chars.length - 1] || 0;
+    }
+    
+    return this.chars[lineIndex] + position.column;
   }
 
   locationToRange(location: TxtNodeLineLocation): TextNodeRange {
@@ -408,6 +456,10 @@ export class Converter {
   }
 
   findLocation(lines: string[], cursor: LineCursor, type: string): TxtNodeLineLocation | null {
+    if (!lines || lines.length === 0 || !cursor || !type) {
+      return null;
+    }
+    
     let found = false;
 
     for (let i = cursor.min; i + lines.length - 1 <= cursor.max; i++) {
@@ -416,16 +468,27 @@ export class Converter {
       const startIdx = cursor.startIdx || 0; // index into the line to begin the search
 
       for (let j = 0; j < lines.length; j++) {
-        let line = this.lines[i + j - 1 + offset];
+        const lineIndex = i + j - 1 + offset;
+        if (lineIndex < 0 || lineIndex >= this.lines.length) {
+          found = false;
+          break;
+        }
+        
+        let line = this.lines[lineIndex];
         if (line === undefined) {
           found = false;
           break;
         }
         while (type !== ASTNodeTypes.CodeBlock && line.match(/^\/\//)) {
           offset++;
-          line = this.lines[i + j - 1 + offset];
+          const newLineIndex = i + j - 1 + offset;
+          if (newLineIndex >= this.lines.length) {
+            found = false;
+            break;
+          }
+          line = this.lines[newLineIndex];
         }
-        if (line.indexOf(lines[j], startIdx) === -1) {
+        if (!found || line.indexOf(lines[j], startIdx) === -1) {
           found = false;
           break;
         }
@@ -437,8 +500,20 @@ export class Converter {
 
       const lastLine = lines[lines.length - 1] || "";
       const endLineNo = i + lines.length - 1 + offset;
-      const endColumn = this.lines[endLineNo - 1].indexOf(lastLine) + lastLine.length;
-      const column = this.lines[i - 1].indexOf(lines[0]);
+      const endLineIndex = endLineNo - 1;
+      
+      if (endLineIndex >= this.lines.length || endLineIndex < 0) {
+        continue;
+      }
+      
+      const endColumn = this.lines[endLineIndex].indexOf(lastLine) + lastLine.length;
+      const startLineIndex = i - 1;
+      
+      if (startLineIndex >= this.lines.length || startLineIndex < 0) {
+        continue;
+      }
+      
+      const column = this.lines[startLineIndex].indexOf(lines[0]);
       return {
         // If the lines starts with //, set 0 instead of -1
         start: { line: i, column: column === -1 ? 0 : column },
@@ -459,10 +534,19 @@ export class Converter {
     return node;
   }
 
-  convertValue(content: string, preformatted: boolean = false) : string {
-    if (preformatted) {
-      content = "<pre>" + content + "</pre>";
+  convertValue(content: string, preformatted: boolean = false): string {
+    if (typeof content !== 'string') {
+      return '';
     }
-    return convert(content, { preserveNewlines: preformatted, wordwrap: false });
+    
+    try {
+      if (preformatted) {
+        content = "<pre>" + content + "</pre>";
+      }
+      return convert(content, { preserveNewlines: preformatted, wordwrap: false });
+    } catch (error) {
+      console.warn('Error converting HTML content:', error);
+      return content; // Return original content as fallback
+    }
   }
 }
