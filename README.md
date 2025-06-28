@@ -13,7 +13,7 @@ This is inspired by [textlint-plugin-asciidoctor](https://github.com/seikichi/te
 ## Installation
 
 ```sh
-> npm install @ynitto/textlint-plugin-asciidoc
+> npm install @nibeaos9/textlint-plugin-asciidoc
 ```
 
 ## Usage
