@@ -1,6 +1,6 @@
 {
-  "name": "@ynitto/textlint-plugin-asciidoc",
-  "version": "0.1.0",
+  "name": "@nibeaos9/textlint-plugin-asciidoc",
+  "version": "0.2.0",
   "description": "Asciidoc support for textlint.",
   "keywords": [
     "asciidoc",
@@ -16,7 +16,7 @@
     "url": "git+https://github.com/ynitto/textlint-plugin-asciidoc.git"
   },
   "license": "MIT",
-  "author": "ynitto",
+  "author": "ynitto,nibeaos9",
   "types": "lib/src/index.d.ts",
   "main": "lib/src/index.js",
   "directories": {
@@ -43,13 +43,15 @@
     "@textlint/kernel": "^12.2.1",
     "@types/html-to-text": "^8.1.0",
     "@types/jest": "^28.1.6",
+    "@types/node": "^24.0.6",
     "jest": "^28.1.3",
     "rimraf": "^3.0.2",
     "ts-jest": "^28.0.7",
-    "typescript": "^4.4.4"
+    "ts-node": "^10.9.2",
+    "typescript": "^4.9.5"
   },
   "publishConfig": {
     "access": "public"
   },
-  "email": "ynitto7@gmail.com"
+  "email": "nibeaos9@fromkamagaya.net"
 }
